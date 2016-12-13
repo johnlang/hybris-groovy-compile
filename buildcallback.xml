@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+ [y] hybris Platform
+ Copyright (c) 2000-2016 SAP SE or an SAP affiliate company.
+ All rights reserved.
+ This software is the confidential and proprietary information of SAP
+ ("Confidential Information"). You shall not disclose such Confidential
+ Information and shall use it only in accordance with the terms of the
+ license agreement you entered into with SAP.
+--><!--
+ All hybris buildcallbacks.xml macrodefinitions:
+ 
+ Build/Documentation
+ 
+	 before/after ant macro "clean"
+		 <macrodef name="lynxcore_before_clean"/>
+		 <macrodef name="lynxcore_after_clean"/>
+	 before/after ant macro "build"
+		 <macrodef name="lynxcore_before_build"/>
+		 <macrodef name="lynxcore_after_build"/>
+	 before/after ant macro "compile_core" - the core module of the extension
+		 <macrodef name="lynxcore_before_compile_core">
+		 <macrodef name="lynxcore_after_compile_core">
+	 before/after ant macro "compile_web" - the web module of the extension
+		 <macrodef name="lynxcore_before_compile_web" />
+		 <macrodef name="lynxcore_after_compile_web" />
+	 before/after ant macro "compile_hmc" - the hmc module of the extension
+		 <macrodef name="lynxcore_before_compile_hmc" />
+		 <macrodef name="lynxcore_after_compile_hmc" />
+ 
+ Preparing extension
+ 
+	 will be called in the beginning of the ant call and only once (also when using multiple 
+	 ant targets e.g. ant build yunittest)
+		 <macrodef name="lynxcore_only_once_prepare"/>
+ 
+ Creating ear module/production
+ 
+	 before/after ant macro "ear"
+		 <macrodef name="lynxcore_before_ear"/>
+		 <macrodef name="lynxcore_after_ear"/>
+	 before/after ant macro "production" - for hybris server only
+		 <macrodef name="lynxcore_before_production" />
+		 <macrodef name="lynxcore_after_production" />
+ 
+ JUnit Test
+ 
+	 before/after ant macro "yunitinit" 
+		 <macrodef name="lynxcore_before_yunitinit" />
+		 <macrodef name="lynxcore_after_yunitinit" />
+	 before/after ant macro "yunit"
+		 <macrodef name="lynxcore_before_yunit" />
+		 <macrodef name="lynxcore_after_yunit" /> 
+ Distribution package
+ 
+ 	 before/after ant macro "dist" - internal target; only for use when platform is available in source code
+		 <macrodef name="lynxcore_after_dist"/>
+		 <macrodef name="lynxcore_before_dist"/>
+	 before/after ant macro "dist_copy" - internal target; only for use when platform is available in source code
+		 <macrodef name="lynxcore_before_dist_copy"/>
+		 <macrodef name="lynxcore_after_dist_copy"/>
+-->
+<project name="lynxcore_buildcallbacks">
+
+    <macrodef name="lynxcore_after_build">
+        <sequential>
+            <impexGenerate extname="lynxcore"/>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="_after_build">
+        <sequential>
+            <if>
+                <istrue value="${groovy.tests.disable}"/>
+                <then>
+                    <echo message="skipping groovy test build!"/>
+                </then>
+                <else>
+                    <echo message="running groovy test build"/>
+                    <build_groovytest/>
+                </else>
+            </if>
+            <temp_add_schema/>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="lynxcore_after_clean">
+        <sequential>
+            <delete failonerror="false" file="${ext.lynxcore.path}/resources-lang/touch_impexgen"/>
+        </sequential>
+    </macrodef>
+
+
+    <macrodef name="lynxcore_after_dist_copy">
+        <sequential>
+            <copy preservelastmodified="true" todir="${destination.folder}/../installer/recipes">
+                <fileset dir="${ext.lynxcore.path}/../recipes/"/>
+            </copy>
+            <if>
+                <istrue value="${dist.development.dist}"/>
+                <then>
+                    <copy preservelastmodified="true" todir="${destination.develop.folder}/../installer/recipes">
+                        <fileset dir="${ext.lynxcore.path}/../recipes/"/>
+                    </copy>
+                </then>
+            </if>
+        </sequential>
+    </macrodef>
+
+
+    <macrodef name="build_groovytest">
+        <sequential>
+            <foreachextIf>
+                <test>
+                    <contains string="@{extname}" substring="lynx"/>
+                </test>
+                <do>
+                    <if>
+                        <available file="${ext.@{extname}.path}/groovytestsrc"/>
+                        <then>
+                            <echo message="building groovytestsrc for @{extname}"/>
+                            <groovy_compile srcdir="${ext.@{extname}.path}/groovytestsrc"
+                                            destdir="${ext.@{extname}.path}/classes"
+                                            extname="@{extname}"/>
+                            <echo message="rebuilding testclasses.xml with groovy tests for @{extname}"/>
+                            <testClassesScanner extension="@{extname}"
+                                                fileExtensions="java,groovy,${ext.@{extname}.native.file.extension}"
+                                                testSourceFolders="testsrc,groovytestsrc,${ext.@{extname}.additional.testsrc.dir}"/>
+                        </then>
+                    </if>
+                    <if>
+                        <and>
+                            <isset property="ext.@{extname}.webmodule.available"/>
+                            <available file="${ext.@{extname}.path}/web/groovytestsrc"/>
+                        </and>
+                        <then>
+                            <if>
+                                <istrue value="${ext.@{extname}.extension.webmodule.sourceavailable}"/>
+                                <then>
+                                    <echo message="compile web source files for @{extname}"/>
+
+                                    <groovy_compile srcdir="${ext.@{extname}.path}/web/groovytestsrc"
+                                                    destdir="${ext.@{extname}.path}/web/testclasses"
+                                                    extname="@{extname}">
+                                        <additionalclasspath>
+                                            <dirset dir="${ext.@{extname}.path}">
+                                                <include name="web/webroot/WEB-INF/classes/"/>
+                                            </dirset>
+                                        </additionalclasspath>
+                                    </groovy_compile>
+                                    <testClassesScanner extension="@{extname}"
+                                                        fileExtensions="java,groovy,${ext.@{extname}.native.file.extension}"
+                                                        testSourceFolders="web/testsrc,web/groovytestsrc,${ext.@{extname}.additional.testsrc.dir}"/>
+                                </then>
+                            </if>
+                        </then>
+                    </if>
+                </do>
+            </foreachextIf>
+        </sequential>
+    </macrodef>
+
+    <!-- exclude impex files from localization -->
+    <patternset id="lynxcore.localization.pattern">
+        <patternset refid="localization.defaultpattern"/>
+        <exclude name="**/*.impex"/>
+    </patternset>
+
+    <!--TODO remmove after global core improvement-->
+    <macrodef name="temp_add_schema">
+        <sequential>
+            <if>
+                <available file="${HYBRIS_CONFIG_DIR}/solr/instances/default/configsets/default/conf/schema.xml"/>
+                <then>
+                    <echo message="Updating SOLR schema - AMWEIA style"/>
+
+                    <copy file="${HYBRIS_CONFIG_DIR}/solr_assets/configsets/default/conf/schema.xml"
+                          tofile="${HYBRIS_CONFIG_DIR}/solr/instances/default/configsets/default/conf/schema.xml"
+                          overwrite="true" verbose="true" filtering="false"/>
+                </then>
+            </if>
+        </sequential>
+    </macrodef>
+
+
+</project>
